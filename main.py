@@ -39,14 +39,15 @@ class LinearRegression:
         Raises:
         - RuntimeError: If XtX is a singular matrix.
         """
-        self.X_train = pd.DataFrame(X)
+        self.X_train = pd.DataFrame(X) # Save the data as DataFrame in order to keep the columns names if given
         self.y_train = pd.Series(y)
+        feature_matrix = np.array(X) # Use numpy matrix in order to make calculations
         y_true_labels = np.array(y)
-        feature_matrix = np.array(X)
         # Add 1 to every feature vector
         feature_matrix = np.concatenate((feature_matrix, np.ones((feature_matrix.shape[0], 1))), axis=1)
         self._weights = np.zeros(len(feature_matrix[0]))
 
+        # Get the optimal weights to optimize the error function
         feature_matrix_transpose = feature_matrix.transpose()
         feature_matrix_squared = np.matmul(feature_matrix_transpose, feature_matrix)
         if is_invertible(feature_matrix_squared):
@@ -119,57 +120,57 @@ class LinearRegression:
         true_labels = np.array(y)
         return ((true_labels - true_labels.mean()) ** 2).sum()
 
-    def fit_using_train_and_print_test_score(self, feature_matrix_train, feature_matrix_test,
-                                             true_labels_train, true_labels_test) -> None:
-        """
-        Fits the model using training data, calculates the R^2 score using test data, and prints the results.
-        Args:
-            feature_matrix_train (array-like): Feature matrix for training the model.
-            feature_matrix_test (array-like): Feature matrix for testing the model.
-            true_labels_train (array-like): True labels corresponding to the training data.
-             true_labels_test (array-like): True labels corresponding to the test data.
-        Returns:
-             None
-        """
-        self.fit(feature_matrix_train, true_labels_train)
-        r_squared = self.score(feature_matrix_test, true_labels_test)
-        print(f"The model achieved a R^2 of {r_squared} "
-              f"and found weights vector of {self._weights}")
+    def adjusted_score(self, X, y) -> float:
+        r_squared = self.score(X, y)
+        sample_size = len(X)
+        num_of_predictors = len(pd.DataFrame(X).iloc[0])
+        return 1 - ((1 - r_squared) * (sample_size - 1)/ (sample_size - num_of_predictors - 1))
 
     def summary(self, X_test = None, y_test = None):
         """
-        Prints the summary of the fitted linear regression model.
+        Returns the summary of the fitted linear regression model as a string.
         Args:
-            - model: Fitted LinearRegression object.
-            - X_column_names: List of column names of the input features.
+            - X_test: DataFrame of test features.
+            - y_test: Series of test labels.
+            - if no test data is given, the summary is in comparison to the trained matrices
         """
         self.X_train = pd.DataFrame(self.X_train)
         self.y_train = pd.Series(self.y_train)
         X_test = pd.DataFrame(X_test)
         y_test = pd.Series(y_test)
 
-        print("==============================================================================")
-        print(f"Dep. Variable:                {self.y_train.name}")
-        print("Loss Function:                MSE")
+        summary_str = "==============================================================================\n"
+        summary_str += f"Dep. Variable:                {self.y_train.name}\n"
+        summary_str += "Loss Function:                MSE\n"
+
         if X_test is not None and y_test is not None:
-            print(f"R-squared:                    {self.score(X_test, y_test):.3f}")
+            r_squared = self.score(X_test, y_test)
+            adj_r_squared = self.adjusted_score(X_test, y_test)
         else:
-            print(f"R-squared:                    {self.score(self.X_train, self.y_train):.3f}")
-        # print(f"Adj. R-squared:               {model.score:.3f}")
-        print(f"No. Observations for train:            {len(self.X_train)}")
+            r_squared = self.score(self.X_train, self.y_train)
+            adj_r_squared = self.adjusted_score(self.X_train, self.y_train)
+
+        summary_str += f"R-squared:                    {r_squared:.6f}\n"
+        summary_str += f"Adj. R-squared:               {adj_r_squared:.6f}\n"
+        summary_str += f"No. Observations for train:   {len(self.X_train)}\n"
+
         if X_test is not None and y_test is not None:
-            print(f"No. Observations for test:             {len(X_test)}")
-        print("==============================================================================")
-        print("Weights Used For Training: ")
-        print("{:<15} {:>10}".format(" ", "coef"))
+            summary_str += f"No. Observations for test:    {len(X_test)}\n"
+
+        summary_str += "==============================================================================\n"
+        summary_str += "Weights Found After Training: \n"
+        summary_str += "{:<15} {:>10}\n".format(" ", "coef")
+
         X_column_names = self.X_train.columns.tolist()
         for i in range(len(self._weights)):
-            print("{:<15} {:10.4f}".format(
+            summary_str += "{:<15} {:10.6f}\n".format(
                 X_column_names[i] if i < len(X_column_names) else "const",
                 self._weights[i]
-            ))
-        print("==============================================================================")
+            )
 
+        summary_str += "==============================================================================\n"
+
+        return summary_str
 
 def main3() -> None:
     """
@@ -184,24 +185,20 @@ def main3() -> None:
 
     linear_regression_model = LinearRegression()
     linear_regression_model.fit(feature_matrix_train, true_labels_train)
-    linear_regression_model.summary(feature_matrix_test, true_labels_test)
-    # linear_regression_model.fit_using_train_and_print_test_score(feature_matrix_train, feature_matrix_test,
-                                                                   # true_labels_train, true_labels_test)
-
+    print(linear_regression_model.summary(feature_matrix_test, true_labels_test))
 
 def main4() -> None:
     """
     Answer for question 4
     """
-    feature_matrix, true_labels = fetch_california_housing(return_X_y=True)
+    feature_matrix, true_labels = fetch_california_housing(return_X_y=True, as_frame=True)
 
     feature_matrix_train, feature_matrix_test, true_labels_train, true_labels_test = (
         train_test_split(feature_matrix, true_labels, test_size=0.2, shuffle=True))
 
     linear_regression_model = LinearRegression()
-    linear_regression_model.fit_using_train_and_print_test_score(feature_matrix_train, feature_matrix_test,
-                                                                   true_labels_train, true_labels_test)
-
+    linear_regression_model.fit(feature_matrix_train, true_labels_train)
+    print(linear_regression_model.summary(feature_matrix_test, true_labels_test))
 
 def get_feature_matrix_with_all_polynomial_combinations(feature_matrix,
                                                         polynomial_degree: int) -> np.ndarray:
@@ -261,11 +258,16 @@ def print_polynomial_degrees_errors(polynomial_degrees_array, polynomial_degrees
     # Add text for each point
     for (polynomial_degree, error) in zip(polynomial_degrees_array, polynomial_degrees_errors):
         plt.text(polynomial_degree + 0.1, error, f'{error:.4f}', fontsize=7, verticalalignment='center')
+
+    # Connecting the dots with a line
+    plt.plot(polynomial_degrees_array, polynomial_degrees_errors, color= "blue")
     plt.xlabel('Polynomial Degree')
     plt.ylabel('1 - R^2')
     plt.title('Polynomial Degree vs Model Error')
-    plt.show()
+    # Set logarithmic scale for y-axis
+    plt.yscale('log')
 
+    plt.show()
 
 def get_degree_with_lowest_error(polynomial_degrees_array, polynomial_degrees_errors) -> int:
     """
@@ -293,22 +295,22 @@ def main5() -> None:
     best_polynomial_degree = get_degree_with_lowest_error(polynomial_degrees_array, polynomial_degrees_errors)
     polynomial_feature_matrix = get_feature_matrix_with_all_polynomial_combinations(feature_matrix,
                                                                                     best_polynomial_degree)
+    # Print all the polynomial degrees and their errors in a scatter plot
+    print_polynomial_degrees_errors(polynomial_degrees_array, polynomial_degrees_errors)
+
     print(f"The selected polynomial degree is {best_polynomial_degree}.")
     feature_matrix_train, feature_matrix_test, true_labels_train, true_labels_test = (
         train_test_split(polynomial_feature_matrix, true_labels, test_size=0.2, shuffle=True))
 
     linear_regression_model = LinearRegression()
-    linear_regression_model.fit_using_train_and_print_test_score(feature_matrix_train, feature_matrix_test,
-                                                                 true_labels_train, true_labels_test)
-
-    # Print all the polynomial degrees and their errors in a scatter plot
-    print_polynomial_degrees_errors(polynomial_degrees_array, polynomial_degrees_errors)
+    linear_regression_model.fit(feature_matrix_train, true_labels_train)
+    print(linear_regression_model.summary(feature_matrix_test, true_labels_test))
 
 
 if __name__ == '__main__':
-    print("\n---------- This is the main for Question 3 ----------\n")
+    print("\n\n---------- This is the main for Question 3 ----------\n\n")
     main3()
-    # print("\n---------- This is the main for Question 4 ----------\n")
-    # main4()
-    # print("\n---------- This is the main for Question 5 ----------\n")
-    # main5()
+    print("\n\n---------- This is the main for Question 4 ----------\n\n")
+    main4()
+    print("\n\n---------- This is the main for Question 5 ----------\n\n")
+    main5()
